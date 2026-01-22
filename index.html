@@ -60,13 +60,20 @@ function draw() {
   else if (gameState === "STAGE_CLEAR") drawFeverScreen();
 }
 
+// --- トップ画面（ビジュアルガイド付き） ---
 function drawStartScreen() {
   background("#F8FAFC");
+  
+  // タイトル
   fill(71, 85, 105);
   textSize(min(width * 0.1, 50));
   textStyle(BOLD);
   text(gameTitle, width / 2, height * 0.12);
+  
+  // ビジュアルガイドの描画
   drawVisualManual();
+  
+  // スタートボタン
   let btnY = height * 0.72;
   fill("#64748B");
   noStroke();
@@ -76,6 +83,8 @@ function drawStartScreen() {
   textSize(24);
   textStyle(NORMAL);
   text("GAME START", width / 2, btnY + 2);
+  
+  // ランキング
   rectMode(CORNER);
   fill(148, 163, 184);
   textSize(14);
@@ -86,13 +95,20 @@ function drawStartScreen() {
   }
 }
 
+// 図解パーツを描画する関数
 function drawVisualManual() {
   let panelW = width * 0.28;
   let panelH = height * 0.3;
   let startY = height * 0.25;
   let spacing = width * 0.32;
+  
+  // 1. 仕分け
   drawPanel(width/2 - spacing, startY, panelW, panelH, "1.仕分け", "左右をタップ", "👈 🍎 🍏 👉");
+  
+  // 2. 確定
   drawPanel(width/2, startY, panelW, panelH, "2.確定", "数えてボタン", "5 / 5 [確定]");
+  
+  // 3. お邪魔
   drawPanel(width/2 + spacing, startY, panelW, panelH, "3.お邪魔", "🥺をタップ", "💥 🥺 💥");
 }
 
@@ -104,50 +120,61 @@ function drawPanel(x, y, w, h, title, sub, visual) {
   strokeWeight(2);
   rectMode(CENTER);
   rect(0, 0, w, h, 15);
+  
   noStroke();
   fill(100);
   textSize(14);
   textStyle(BOLD);
   text(title, 0, -h/2 + 25);
+  
   fill(130);
   textSize(11);
   textStyle(NORMAL);
   text(sub, 0, -h/2 + 45);
+  
   fill(71, 85, 105);
   textSize(w * 0.2);
   text(visual, 0, 15);
   pop();
 }
 
+// --- ゲームロジック（前回の機能をすべて維持） ---
 function drawGamePlay() {
   let s = isChaosMode ? {bgL:"#000", bgR:"#111", speed:chaosSpeed, span:chaosSpan} : stages[currentStage];
   noStroke();
   fill(s.bgL); rect(0, 0, width/2, height);
   fill(s.bgR); rect(width/2, 0, width/2, height);
+  
   fill(255, 200); rect(width*0.05, 30, width*0.9, 140, 20);
+  
   textSize(24);
   let heartText = "";
   for(let i=0; i<maxLives; i++) heartText += (i < lives) ? "❤️" : "🖤";
   text(heartText, width/2, height - 140);
+
   fill(71, 85, 105);
-  let lvLabel = isChaosMode ? "CHAOS MODE" : "Level " + (currentStage + 1);
+  let lvLabel = isChaosMode ? "CHAOS MODE (加速中！)" : "Level " + (currentStage + 1);
   textSize(16); text(lvLabel, width/2, 55);
+  
   textSize(18);
   let leftT = (targetSide === "LEFT") ? "数える: " + targetEmoji : otherEmoji;
   let rightT = (targetSide === "RIGHT") ? "数える: " + targetEmoji : otherEmoji;
   text("← " + leftT, width*0.25, 85);
   text(rightT + " →", width*0.75, 85);
+  
   textSize(22); textStyle(BOLD);
   if (isChaosMode) {
     fill("#ff4d4d");
-    text(targetEmoji + " をミスするまで仕分け！", width/2, 125);
+    text(targetEmoji + " をミスするまで仕分けましょう！", width/2, 125);
   } else {
     fill(71, 85, 105);
-    text(targetEmoji + " を [ " + stages[currentStage].goal + " ] 個数える", width/2, 125);
+    text(targetEmoji + " を [ " + stages[currentStage].goal + " ] 個数えましょう！", width/2, 125);
   }
   textStyle(NORMAL);
+
   handleActiveEmojis();
   drawStacks();
+
   rectMode(CENTER);
   fill(71, 85, 105); rect(width/2, height - 70, 140, 55, 15);
   fill(255); textSize(20); text("確定", width/2, height - 68);
@@ -175,3 +202,162 @@ function handleActiveEmojis() {
 }
 
 function drawStacks() {
+  textSize(width * 0.15); 
+  for (let item of leftStack) {
+    push(); translate(item.x, item.y); rotate(item.angle); text(item.emoji, 0, 0); pop();
+  }
+  for (let item of rightStack) {
+    push(); translate(item.x, item.y); rotate(item.angle); text(item.emoji, 0, 0); pop();
+  }
+}
+
+function touchStarted() {
+  handleInput(mouseX, mouseY);
+  return false; 
+}
+
+function mousePressed() {
+  handleInput(mouseX, mouseY);
+}
+
+function handleInput(x, y) {
+  if (gameState === "START") {
+    let btnY = height * 0.72;
+    if (x > width/2 - 110 && x < width/2 + 110 && y > btnY - 35 && y < btnY + 35) {
+      gameState = "PLAY"; startTime = millis();
+    }
+    return;
+  }
+  if (gameState === "PLAY") {
+    if (x > width/2 - 70 && x < width/2 + 70 && y > height - 100 && y < height - 40) {
+      checkResult(); return;
+    }
+    if (activeEmojis.length > 0) {
+      let first = activeEmojis[0];
+      let d = dist(x, y, first.x, first.y);
+      if (first.emoji === badEmoji) {
+        if (d < 80) { activeEmojis.splice(0, 1); return; }
+        else { reduceLife("🥺は本体を直接タップしましょう！"); return; }
+      }
+      if (x > width / 2) success("RIGHT", first.emoji);
+      else success("LEFT", first.emoji);
+      activeEmojis.splice(0, 1);
+      if (isChaosMode) {
+        shuffleRule(true);
+        chaosSpeed += 0.15;
+        chaosSpan = max(15, chaosSpan - 1); 
+      }
+    }
+  } else if (gameState === "STAGE_CLEAR") nextStage();
+}
+
+function shuffleRule(chaos = false) {
+  let s = chaos ? {pair:["🔥","💀"]} : stages[currentStage];
+  if (random() > 0.5) { targetEmoji = s.pair[0]; otherEmoji = s.pair[1]; }
+  else { targetEmoji = s.pair[1]; otherEmoji = s.pair[0]; }
+  targetSide = random() > 0.5 ? "RIGHT" : "LEFT";
+}
+
+function success(side, emoji) {
+  let isTarget = (emoji === targetEmoji);
+  let isCorrectSide = (side === targetSide);
+  let isCorrect = (isTarget && isCorrectSide) || (!isTarget && !isCorrectSide);
+  if (!isCorrect) { reduceLife("仕分けミスです😞"); return; }
+  if (isTarget) targetCount++;
+  let item = {
+    emoji: emoji, 
+    x: (side === "RIGHT") ? width - random(30, 80) : random(30, 80),
+    y: height - 180 - ((side === "RIGHT" ? rightStack.length : leftStack.length) * 8) + random(-15, 15),
+    angle: random(-0.8, 0.8)
+  };
+  if (side === "RIGHT") rightStack.push(item); else leftStack.push(item);
+}
+
+function reduceLife(msg) {
+  lives--;
+  if (lives <= 0) {
+    alert(msg + "\nライフがなくなりました...");
+    fail("ゲームオーバー！");
+  } else {
+    alert(msg + "\nライフを1つ失いました。このステージをやり直します！\nのこりライフ: " + lives);
+    initStage();
+    startTime = millis();
+  }
+}
+
+function fail(msg) {
+  alert(msg);
+  saveScore();
+  resetGame();
+}
+
+function resetGame() {
+  currentStage = 0; totalScore = 0; isChaosMode = false;
+  chaosSpeed = 2.5; chaosSpan = 75; 
+  lives = 3; 
+  gameState = "START";
+  initStage();
+}
+
+function checkResult() {
+  if (isChaosMode) {
+     alert("カオスモードに終わりはありません。\nミスするまで頑張りましょう！");
+     return;
+  }
+  if (targetCount === stages[currentStage].goal) {
+    let timeTaken = (millis() - startTime) / 1000;
+    let stageScore = floor((2000 / timeTaken) * (currentStage + 1));
+    totalScore += stageScore;
+    gameState = "STAGE_CLEAR";
+    for(let i=0; i<60; i++) particles.push({x: random(width), y: random(-height, 0), s: random(5, 12)});
+  } else {
+    reduceLife(`数が違います！ 正解は ${targetCount} 個でした。`);
+  }
+}
+
+function saveScore() {
+  if (totalScore > 0 || isChaosMode) {
+    let label = isChaosMode ? "CHAOS" : currentStage + 1;
+    highScores.push({ score: totalScore, lv: label });
+    highScores.sort((a, b) => b.score - a.score);
+    highScores = highScores.slice(0, 5);
+    localStorage.setItem('emojiSortingRanking', JSON.stringify(highScores));
+  }
+}
+
+function drawFeverScreen() {
+  background("#FEF3C7");
+  textSize(width * 0.2);
+  for (let p of particles) {
+    text(targetEmoji, p.x, p.y);
+    p.y += p.s;
+    if (p.y > height) p.y = -80;
+  }
+  fill(255, 240); rect(width/2 - 140, height/2 - 70, 280, 140, 20);
+  fill(71, 85, 105); textSize(24); 
+  text(`おめでとうございます🥳\nScore: ${totalScore}\n次へ進みましょう🏃‍♀️`, width/2, height/2);
+}
+
+function nextStage() {
+  particles = [];
+  currentStage++;
+  if (currentStage >= stages.length) { 
+    if (!isChaosMode) {
+      alert("全ステージ完全攻略です🎉\nおめでとうございます🎊カオスステージに突入です");
+      isChaosMode = true;
+      chaosSpeed = 2.5; chaosSpan = 75;
+    }
+  }
+  gameState = "PLAY"; startTime = millis();
+  initStage();
+}
+
+function initStage() {
+  shuffleRule(isChaosMode);
+  targetCount = 0;
+  leftStack = []; rightStack = []; activeEmojis = [];
+  spawnTimer = 0;
+}
+</script>
+</body>
+</html>
